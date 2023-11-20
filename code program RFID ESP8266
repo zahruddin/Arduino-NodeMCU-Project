@@ -1,0 +1,98 @@
+#include <SPI.h>
+#include <MFRC522.h>
+
+#include <ESP8266HTTPClient.h>
+#include <ESP8266WiFi.h>
+#include <WiFiClientSecure.h>
+
+//Network SSID
+const char* ssid = "halo";
+const char* password = "12345678";
+
+const char* host = "voteme.ahmaddahlan.ac.id";
+
+#define LED_PIN 15 //D8
+#define BTN_PIN D1  //D1
+
+//sediakan variabel untuk RFID
+#define SDA_PIN 2  //D4
+#define RST_PIN 0  //D3
+
+MFRC522 mfrc522(SDA_PIN, RST_PIN);
+
+void setup() {
+  Serial.begin(115200);
+
+  //setting koneksi wifi
+  WiFi.hostname("NodeMCU");
+    WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+
+  //cek koneksi wifi
+  while(WiFi.status() != WL_CONNECTED)
+  {
+    //progress sedang mencari WiFi
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.println("Wifi Connected");
+  Serial.println("IP Address : ");
+  Serial.println(WiFi.localIP());
+
+  pinMode(LED_PIN, OUTPUT);
+  pinMode(BTN_PIN, OUTPUT);
+
+  SPI.begin();
+  mfrc522.PCD_Init();
+  Serial.println("Dekatkan Kartu RFID Anda ke Reader");
+  Serial.println();
+}
+
+void loop() {
+  //matikan lampu LED
+  digitalWrite(LED_PIN, LOW);
+
+  if(! mfrc522.PICC_IsNewCardPresent())
+     return ;
+
+  if(! mfrc522.PICC_ReadCardSerial())
+     return ;
+
+  String IDTAG = "";
+  for(byte i=0; i<mfrc522.uid.size; i++)
+  {
+      IDTAG += mfrc522.uid.uidByte[i];
+  }
+
+
+
+  //kirim nomor kartu RFID untuk disimpan ke tabel tmprfid
+   WiFiClientSecure client;
+  const int httpsPort = 443;
+  if(!client.connect(host, httpsPort))
+  {
+     Serial.println("Connection Failed");
+     digitalWrite(LED_PIN, HIGH);
+     delay(200);
+     digitalWrite(LED_PIN, LOW);
+     delay(100);
+     digitalWrite(LED_PIN, HIGH);
+     delay(200);
+     digitalWrite(LED_PIN, LOW);
+     return;
+  }
+  
+  //nyalakan lampu LED
+  digitalWrite(LED_PIN, HIGH);
+  String url = "/absensi/absensi.php?token=A001&nokartu="+ IDTAG;
+  Serial.print("requesting URL: ");
+  Serial.println(url);
+  client.print(String("GET ") + url + " HTTP/1.1\r\n" +
+               "Host: " + host + "\r\n" +
+               "User-Agent: BuildFailureDetectorESP8266\r\n" +
+               "Connection: close\r\n\r\n");
+               
+
+  delay(2000);
+}
